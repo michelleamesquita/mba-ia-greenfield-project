@@ -48,3 +48,31 @@ export class TokenReuseDetectedException extends DomainException {
     );
   }
 }
+
+export class VideoNotFoundException extends DomainException {
+  constructor() {
+    super('VIDEO_NOT_FOUND', 404, 'Video not found');
+  }
+}
+
+export class VideoNotReadyException extends DomainException {
+  constructor() {
+    super('VIDEO_NOT_READY', 409, 'Video is not ready for playback');
+  }
+}
+
+export class VideoOwnershipException extends DomainException {
+  constructor() {
+    super('VIDEO_OWNERSHIP_DENIED', 403, 'You do not own this video');
+  }
+}
+
+export class VideoInvalidStatusException extends DomainException {
+  constructor(currentStatus: string) {
+    super(
+      'VIDEO_INVALID_STATUS',
+      409,
+      `Cannot perform this action on a video with status "${currentStatus}"`,
+    );
+  }
+}

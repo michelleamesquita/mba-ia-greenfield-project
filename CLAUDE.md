@@ -22,9 +22,40 @@ See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 - **API** (Nest.js) → business rules, auth, reads/writes DB, uploads to storage, publishes jobs to queue, sends emails
 - **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
 - **Database** (PostgreSQL) → users, channels, videos, comments, likes
-- **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
+- **Object Storage** (MinIO/S3-compatible) → video files and thumbnails; local: `minio:9000`, bucket: `videos`
+- **Message Queue** (BullMQ + Redis) → video processing job queue; local: `redis:6379`
 - **Email Service** (SMTP) → account confirmation and password recovery
+
+## Videos Module (Phase 03)
+
+Key patterns and conventions established in Phase 03:
+
+### Upload Flow
+1. Client calls `POST /videos/upload` → API creates `Video` in `draft` status, returns `uploadUrl` (MinIO pre-signed PUT) + `videoId` + `slug`
+2. Client uploads file directly to MinIO using the pre-signed URL
+3. Client calls `POST /videos/:id/complete` → API sets status to `pending` and enqueues a BullMQ job
+4. Worker (`video-worker` service) picks up the job, downloads video, runs ffprobe + ffmpeg, uploads thumbnail, sets status to `ready`
+
+### Video Status Lifecycle
+`draft` → `pending` → `processing` → `ready` | `error`
+
+### Streaming / Download
+- `GET /videos/:slug/stream` → 302 redirect to MinIO pre-signed GET URL (supports Range/HLS)
+- `GET /videos/:slug/download` → 302 redirect with `Content-Disposition: attachment`
+
+### Worker Entry Point
+- `src/worker.ts` bootstraps `VideoWorkerModule` as a standalone context (no HTTP)
+- Runs as the `video-worker` Docker Compose service using `Dockerfile.worker`
+- Worker image installs `ffmpeg` + `ffprobe` via apt
+
+### Unique Video URL
+- Videos use a `nanoid` 11-character slug as the public identifier (`/videos/:slug`)
+- Internal UUID `id` is used for ownership/auth checks
+
+### Jest Config Notes
+- `transformIgnorePatterns: ["/node_modules/(?!(nanoid))"]` — `nanoid` is ESM-only and must be transformed by ts-jest
+- Spec files have ESLint overrides (`unbound-method`, `no-require-imports`, `no-implied-eval` are disabled) — standard Jest patterns
+- Use **factory mocks** (`jest.mock('module', () => ({...}))`) when a module's import chain loads TypeORM; auto-mocks still execute the original module
 
 ## Docker Networking
 
