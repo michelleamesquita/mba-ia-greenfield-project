@@ -2,18 +2,20 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigType } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { AuthModule } from './auth/auth.module';
-import appConfig from './config/app.config';
-import authConfig from './config/auth.config';
-import databaseConfig from './config/database.config';
-import mailConfig from './config/mail.config';
-import queueConfig from './config/queue.config';
-import storageConfig from './config/storage.config';
-import swaggerConfig from './config/swagger.config';
-import { envValidationSchema } from './config/env.validation';
-import { VideosModule } from './videos/videos.module';
+import { ChannelsModule } from '../channels/channels.module';
+import appConfig from '../config/app.config';
+import authConfig from '../config/auth.config';
+import databaseConfig from '../config/database.config';
+import mailConfig from '../config/mail.config';
+import queueConfig from '../config/queue.config';
+import storageConfig from '../config/storage.config';
+import swaggerConfig from '../config/swagger.config';
+import { envValidationSchema } from '../config/env.validation';
+import { StorageModule } from '../storage/storage.module';
+import { Video } from '../videos/entities/video.entity';
+import { VideoProcessingProcessor } from '../videos/processors/video-processing.processor';
+import { VideosRepository } from '../videos/repositories/videos.repository';
+import { VIDEO_PROCESSING_QUEUE } from '../videos/videos.service';
 
 @Module({
   imports: [
@@ -41,7 +43,7 @@ import { VideosModule } from './videos/videos.module';
         username: dbConfig.username,
         password: dbConfig.password,
         database: dbConfig.name,
-        autoLoadEntities: true,
+        entities: [Video],
         synchronize: false,
       }),
     }),
@@ -55,10 +57,11 @@ import { VideosModule } from './videos/videos.module';
         },
       }),
     }),
-    AuthModule,
-    VideosModule,
+    BullModule.registerQueue({ name: VIDEO_PROCESSING_QUEUE }),
+    TypeOrmModule.forFeature([Video]),
+    StorageModule,
+    ChannelsModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  providers: [VideosRepository, VideoProcessingProcessor],
 })
-export class AppModule {}
+export class VideoWorkerModule {}
